@@ -31,7 +31,10 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ThreatCheck-windows-x64
-        path: ThreatCheck/bin/Release/ThreatCheck.exe
+        path: |
+          ThreatCheck/bin/Release/ThreatCheck.exe
+          ThreatCheck/bin/Release/ThreatCheck.exe.config
+          ThreatCheck/bin/Release/*.dll
         if-no-files-found: error
 
   build-linux:
@@ -61,5 +64,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ThreatCheck-linux-amd64
-        path: ThreatCheck/bin/Release/ThreatCheck.exe
+        path: |
+          ThreatCheck/bin/Release/ThreatCheck.exe
+          ThreatCheck/bin/Release/ThreatCheck.exe.config
+          ThreatCheck/bin/Release/*.dll
         if-no-files-found: error
