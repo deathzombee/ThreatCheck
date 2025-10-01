@@ -1,0 +1,65 @@
+name: Build ThreatCheck
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+      
+    - name: Restore NuGet packages
+      run: nuget restore ThreatCheck.sln
+      
+    - name: Build for x64 Windows
+      run: msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU" /p:PlatformTarget=x64
+      
+    - name: Upload Windows x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ThreatCheck-windows-x64
+        path: ThreatCheck/bin/Release/ThreatCheck.exe
+        if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mono-complete msbuild
+    
+    - name: Restore NuGet packages
+      run: nuget restore ThreatCheck.sln
+    
+    - name: Build for Linux amd64
+      run: msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU"
+      
+    - name: Upload Linux amd64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ThreatCheck-linux-amd64
+        path: ThreatCheck/bin/Release/ThreatCheck.exe
+        if-no-files-found: error
