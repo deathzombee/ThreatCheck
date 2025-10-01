@@ -3,6 +3,52 @@ Modified version of [Matterpreter's](https://twitter.com/matterpreter) [Defender
 
 Takes a binary as input (either from a file on disk or a URL), splits it until it pinpoints that exact bytes that the target engine will flag on and prints them to the screen. This can be helpful when trying to identify the specific bad pieces of code in your tool/payload.
 
+## Building
+
+### Automated Builds (GitHub Actions)
+
+This repository includes GitHub Actions workflows that automatically build ThreatCheck for both Windows x64 and Linux amd64:
+
+- **On every push to master/main**: Artifacts are available in the Actions tab
+- **On pull requests**: Build verification runs automatically
+- **On version tags**: Creates releases with downloadable ZIP files
+
+To create a release:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Download pre-built binaries from the [Releases](../../releases) page.
+
+### Manual Build
+
+To build manually, open `ThreatCheck.sln` in Visual Studio and build in Release mode, or use MSBuild:
+
+```bash
+# Windows
+msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+# Linux (using Mono)
+msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU"
+```
+
+## Platform Support
+
+### Windows
+- **Defender Engine**: Uses Windows Defender (`MpCmdRun.exe`)
+- **AMSI Engine**: Uses Windows AMSI (Anti-Malware Scan Interface)
+- Full functionality available
+
+### Linux
+- **Defender Engine**: Uses Microsoft Defender for Endpoint (`mdatp`)
+  - Requires [Microsoft Defender for Endpoint for Linux](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-linux) to be installed
+  - Install using the [MDE installer script](https://github.com/microsoft/mdatp-xplat/blob/master/linux/installation/mde_installer.sh)
+- **AMSI Engine**: Not available on Linux (Windows-specific API)
+- Binary scanning with Defender engine fully supported on Linux with MDE installed
+
+## Usage
+
 ```text
 C:\>ThreatCheck.exe --help
   -e, --engine    (Default: Defender) Scanning engine. Options: Defender, AMSI

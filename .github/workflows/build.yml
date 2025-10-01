@@ -1,0 +1,111 @@
+name: Build ThreatCheck
+
+on:
+  push:
+    branches: [ master, main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+      
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+      
+    - name: Restore NuGet packages
+      run: nuget restore ThreatCheck.sln
+      
+    - name: Build for x64 Windows
+      run: msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU" /p:PlatformTarget=x64
+      
+    - name: Upload Windows x64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ThreatCheck-windows-x64
+        path: |
+          ThreatCheck/bin/Release/ThreatCheck.exe
+          ThreatCheck/bin/Release/ThreatCheck.exe.config
+          ThreatCheck/bin/Release/*.dll
+        if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mono-complete msbuild
+    
+    - name: Restore NuGet packages
+      run: nuget restore ThreatCheck.sln
+    
+    - name: Build for Linux amd64
+      run: msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU"
+      
+    - name: Upload Linux amd64 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ThreatCheck-linux-amd64
+        path: |
+          ThreatCheck/bin/Release/ThreatCheck.exe
+          ThreatCheck/bin/Release/ThreatCheck.exe.config
+          ThreatCheck/bin/Release/*.dll
+        if-no-files-found: error
+
+  create-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ThreatCheck-windows-x64
+        path: windows-x64
+    
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ThreatCheck-linux-amd64
+        path: linux-amd64
+    
+    - name: Create ZIP archives
+      run: |
+        cd windows-x64 && zip -r ../ThreatCheck-windows-x64.zip . && cd ..
+        cd linux-amd64 && zip -r ../ThreatCheck-linux-amd64.zip . && cd ..
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ThreatCheck-windows-x64.zip
+          ThreatCheck-linux-amd64.zip
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
