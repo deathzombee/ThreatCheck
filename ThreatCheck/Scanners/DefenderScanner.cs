@@ -17,15 +17,20 @@ internal sealed class DefenderScanner : Scanner
 
     public void AnalyzeFile()
     {
-        if (!Directory.Exists(@"C:\Temp"))
+        // Determine temp directory based on OS
+        var tempDir = Environment.OSVersion.Platform == PlatformID.Unix 
+            ? "/tmp/threatcheck" 
+            : @"C:\Temp";
+        
+        if (!Directory.Exists(tempDir))
         {
 #if DEBUG
-            CustomConsole.WriteDebug(@"C:\Temp doesn't exist. Creating it...");
+            CustomConsole.WriteDebug($"{tempDir} doesn't exist. Creating it...");
 #endif
-            Directory.CreateDirectory(@"C:\Temp");
+            Directory.CreateDirectory(tempDir);
         }
 
-        _filePath = Path.Combine(@"C:\Temp", "file.exe");
+        _filePath = Path.Combine(tempDir, "file.exe");
         File.WriteAllBytes(_filePath, _fileBytes);
 
         var status = ScanFile(_filePath);
@@ -86,47 +91,108 @@ internal sealed class DefenderScanner : Scanner
         }
 
         using var process = new Process();
-        var mpcmdrun = new ProcessStartInfo(@"C:\Program Files\Windows Defender\MpCmdRun.exe")
-        {
-            Arguments = $"-Scan -ScanType 3 -File \"{file}\" -DisableRemediation -Trace -Level 0x10",
-            CreateNoWindow = true,
-            ErrorDialog = false,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
+        ProcessStartInfo startInfo;
 
-        process.StartInfo = mpcmdrun;
-        process.Start();
-        process.WaitForExit(30000); // Wait 30s
-
-        if (!process.HasExited)
+        // Detect OS and use appropriate scanner
+        if (Environment.OSVersion.Platform == PlatformID.Unix)
         {
-            process.Kill();
-            result.Result = ScanResult.Timeout;
-            return result;
+            // Linux: Use Microsoft Defender for Endpoint (mdatp)
+            startInfo = new ProcessStartInfo("mdatp")
+            {
+                Arguments = $"scan custom --path \"{file}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+        }
+        else
+        {
+            // Windows: Use Windows Defender (MpCmdRun.exe)
+            startInfo = new ProcessStartInfo(@"C:\Program Files\Windows Defender\MpCmdRun.exe")
+            {
+                Arguments = $"-Scan -ScanType 3 -File \"{file}\" -DisableRemediation -Trace -Level 0x10",
+                CreateNoWindow = true,
+                ErrorDialog = false,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
         }
 
-        if (getSig)
+        process.StartInfo = startInfo;
+        
+        try
         {
-            while (process.StandardOutput.ReadLine() is { } stdout)
+            process.Start();
+            process.WaitForExit(30000); // Wait 30s
+
+            if (!process.HasExited)
             {
-                if (!stdout.Contains("Threat  "))
-                    continue;
-                
-                var sig = stdout.Split(' ');
-                var sigName = sig[19];
-                result.Signature = sigName;
-                break;
+                process.Kill();
+                result.Result = ScanResult.Timeout;
+                return result;
+            }
+
+            if (getSig)
+            {
+                while (process.StandardOutput.ReadLine() is { } stdout)
+                {
+                    if (Environment.OSVersion.Platform == PlatformID.Unix)
+                    {
+                        // MDE Linux output format: typically includes "Threat name:"
+                        if (stdout.Contains("Threat name:"))
+                        {
+                            var parts = stdout.Split(':');
+                            if (parts.Length > 1)
+                            {
+                                result.Signature = parts[1].Trim();
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Windows Defender output format
+                        if (!stdout.Contains("Threat  "))
+                            continue;
+                        
+                        var sig = stdout.Split(' ');
+                        var sigName = sig[19];
+                        result.Signature = sigName;
+                        break;
+                    }
+                }
+            }
+
+            // Determine result based on exit code
+            if (Environment.OSVersion.Platform == PlatformID.Unix)
+            {
+                // MDE Linux exit codes: 0 = success/no threat, 2 = threat found
+                result.Result = process.ExitCode switch
+                {
+                    0 => ScanResult.NoThreatFound,
+                    2 => ScanResult.ThreatFound,
+                    _ => ScanResult.Error
+                };
+            }
+            else
+            {
+                // Windows Defender exit codes
+                result.Result = process.ExitCode switch
+                {
+                    0 => ScanResult.NoThreatFound,
+                    2 => ScanResult.ThreatFound,
+                    _ => ScanResult.Error
+                };
             }
         }
-
-        result.Result = process.ExitCode switch
+        catch (Exception ex)
         {
-            0 => ScanResult.NoThreatFound,
-            2 => ScanResult.ThreatFound,
-            _ => ScanResult.Error
-        };
+            CustomConsole.WriteError($"Error scanning file: {ex.Message}");
+            result.Result = ScanResult.Error;
+        }
 
         return result;
     }

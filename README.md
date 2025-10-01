@@ -33,7 +33,19 @@ msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU"
 msbuild ThreatCheck.sln /p:Configuration=Release /p:Platform="Any CPU"
 ```
 
-**Note**: While ThreatCheck can be compiled on Linux, it requires Windows-specific APIs (AMSI and Windows Defender) to function properly. The Linux build is provided for development purposes but will have limited runtime functionality.
+## Platform Support
+
+### Windows
+- **Defender Engine**: Uses Windows Defender (`MpCmdRun.exe`)
+- **AMSI Engine**: Uses Windows AMSI (Anti-Malware Scan Interface)
+- Full functionality available
+
+### Linux
+- **Defender Engine**: Uses Microsoft Defender for Endpoint (`mdatp`)
+  - Requires [Microsoft Defender for Endpoint for Linux](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint-linux) to be installed
+  - Install using the [MDE installer script](https://github.com/microsoft/mdatp-xplat/blob/master/linux/installation/mde_installer.sh)
+- **AMSI Engine**: Not available on Linux (Windows-specific API)
+- Binary scanning with Defender engine fully supported on Linux with MDE installed
 
 ## Usage
 
